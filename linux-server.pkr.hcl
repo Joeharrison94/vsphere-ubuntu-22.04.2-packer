@@ -147,7 +147,6 @@ variable "vm_guest_os_type" {
 variable "vm_version" {
   type = number
   description = "The VM virtual hardware version."
-  # https://kb.vmware.com/s/article/1003746
 }
 
 variable "vm_firmware" {
@@ -216,19 +215,21 @@ variable "shell_scripts" {
   default = []
 }
 
-##################################################################################
-# LOCALS
-##################################################################################
+####################################################################
+####################################################################
+
+// Locals
 
 locals {
   buildtime = formatdate("YYYY-MM-DD hh:mm ZZZ", timestamp())
+  vmsuffix = formatdate("YYMMDDhhmm", timestamp())
 }
 
-##################################################################################
-# SOURCE
-##################################################################################
+// Source
 
 source "vsphere-iso" "linux-server" {
+  
+  // VMware Variables
   vcenter_server = var.vcenter_server
   username = var.vcenter_username
   password = var.vcenter_password
@@ -238,13 +239,15 @@ source "vsphere-iso" "linux-server" {
   cluster = var.vcenter_cluster
   folder = var.vcenter_folder
   insecure_connection = var.vcenter_insecure_connection
+  
+  // VM Variables
   tools_upgrade_policy = true
   remove_cdrom = true
   convert_to_template = true
   guest_os_type = var.vm_guest_os_type
   vm_version = var.vm_version
-  notes = "Built by HashiCorp Packer on ${local.buildtime}."
-  vm_name = var.vm_name
+  notes = "Built by Packer on ${local.buildtime}."
+  vm_name = "${var.vm_name}-${local.vmsuffix}"
   firmware = var.vm_firmware
   CPUs = var.vm_cpu_sockets
   cpu_cores = var.vm_cpu_cores
@@ -263,9 +266,13 @@ source "vsphere-iso" "linux-server" {
     network = var.vcenter_network
     network_card = var.vm_network_card
   }
+  
+  // Iso Variables
   iso_url = var.iso_url
   // iso_paths = ["[${ var.vcenter_datastore }] /${ var.iso_path }/${ var.iso_file }"]
   iso_checksum = "${var.iso_checksum_type}:${var.iso_checksum}"
+  
+  // HTTP Directory and Boot Variables
   http_directory = var.http_directory
   boot_order = "disk,cdrom"
   boot_wait = var.vm_boot_wait
@@ -279,22 +286,27 @@ source "vsphere-iso" "linux-server" {
     "<F10>"
   ]
   ip_wait_timeout = "20m"
+  
+  // SSH Values
   ssh_password = var.ssh_password
   ssh_username = var.ssh_username
   ssh_port = 22
   ssh_timeout = "30m"
   ssh_handshake_attempts = "100"
+  
+  // Shutdown Commands
   shutdown_command = "echo '${var.ssh_password}' | sudo -S -E shutdown -P now"
   shutdown_timeout = "15m"
 }
 
-##################################################################################
-# BUILD
-##################################################################################
+// Build
 
 build {
+  // Source
   sources = [
     "source.vsphere-iso.linux-server"]
+  
+  // Provisioner
   provisioner "shell" {
     execute_command = "echo '${var.ssh_password}' | {{.Vars}} sudo -S -E bash '{{.Path}}'"
     environment_vars = [
