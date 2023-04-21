@@ -7,6 +7,20 @@ echo '> Creating cleanup script ...'
 sudo cat <<EOF > /tmp/cleanup.sh
 #!/bin/bash
 
+# Apt Cleanup
+echo '> Cleaning apt-get ...'
+apt autoremove -y
+apt clean
+
+# Disable IPv6
+echo net.ipv6.conf.all.disable_ipv6=1 | sudo tee -a /etc/sysctl.conf
+echo net.ipv6.conf.default.disable_ipv6=1 | sudo tee -a /etc/sysctl.conf
+echo net.ipv6.conf.l0.disable_ipv6=1 | sudo tee -a /etc/sysctl.conf
+sysctl -p
+
+# Stop services for cleanup
+service rsyslog stop
+
 # Cleans all audit logs.
 echo '> Cleaning all audit logs ...'
 if [ -f /var/log/audit/audit.log ]; then
@@ -30,15 +44,40 @@ echo '> Cleaning /tmp directories ...'
 rm -rf /tmp/*
 rm -rf /var/tmp/*
 
-# Sets hostname to localhost.
-echo '> Setting hostname to localhost ...'
-cat /dev/null > /etc/hostname
-hostnamectl set-hostname localhost
+# Cleans SSH keys.
+echo '> Cleaning SSH keys ...'
+rm -f /etc/ssh/ssh_host_*
 
-# Cleans apt-get.
-echo '> Cleaning apt-get ...'
-apt-get clean
-apt-get autoremove
+# Add check for ssh keys on reboot...regenerate if neccessary
+cat << 'EOL' | sudo tee /etc/rc.local
+#!/bin/sh -e
+#
+# rc.local
+#
+# This script is executed at the end of each multiuser runlevel.
+# Make sure that the script will "" on success or any other
+# value on error.
+#
+# In order to enable or disable this script just change the execution
+# bits.
+#
+# By default this script does nothing.
+# dynamically create hostname (optional)
+if hostname | grep localhost; then
+    hostnamectl set-hostname "$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 13 ; echo '')"
+fi
+test -f /etc/ssh/ssh_host_dsa_key || dpkg-reconfigure openssh-server
+exit 0
+EOL
+
+# Make sure the script is executable
+chmod +x /etc/rc.local
+
+# Sets hostname to localhost.
+# Prevent cloudconfig from preserving the original hostname
+sed -i 's/preserve_hostname: false/preserve_hostname: true/g' /etc/cloud/cloud.cfg
+truncate -s0 /etc/hostname
+hostnamectl set-hostname localhost
 
 # Cleans the machine-id.
 echo '> Cleaning the machine-id ...'
@@ -66,13 +105,21 @@ sed -i -e "s/GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"/GRUB_CMDLINE_LINUX_DEFAULT=\"
 update-grub
 EOF
 
-### Change script permissions for execution. ### 
+### Change script permissions for execution. ###
 echo '> Changeing script permissions for execution ...'
 sudo chmod +x /tmp/cleanup.sh
 
-
-### Executes the cleauup script. ### 
+### Executes the cleauup script. ###
 echo '> Executing the cleanup script ...'
 sudo /tmp/cleanup.sh
+
+### All done. ###
+echo '> Done.'
+
+# Make mount point for future data drive
+mkdir /mnt/DATA-DRIVE
+
+# Remove Networking
+rm /etc/netplan/00-installer-config.yaml
 
 echo '> Packer Template Build -- Complete'
