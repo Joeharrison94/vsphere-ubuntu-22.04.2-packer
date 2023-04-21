@@ -1,0 +1,39 @@
+#cloud-config
+autoinstall:
+    version: 1
+    early-commands:
+        - sudo systemctl stop ssh
+    locale: en_GB.UTF-8
+    keyboard:
+        layout: gb
+    packages: [open-vm-tools, openssh-server, net-tools, perl, open-iscsi, ntp, curl, vim, ifupdown, zip, unzip, gnupg2, software-properties-common, apt-transport-https, ca-certificates, lsb-release, python3-pip, jq, cloud-init]
+    network:
+        network:
+            version: 2
+            ethernets:
+                ens192:
+                    addresses:
+                    - 172.30.202.39/22
+                    gateway4: 172.30.200.1
+                    nameservers:
+                      addresses:
+                      - 172.30.125.64
+                      - 1.1.1.1
+                      search: []
+    identity:
+        hostname: cs-template
+        username: administrator
+        password: "$6$rounds=4096$xtYM.GdSAq6uvY$9uTs9w4SeQ8dspFanbBXopAWYzjdZnexufuRSshTVSLNBF6zDFolKia2UhXPAeJA1oYo6xsdjcQA8g9vpJizV1"
+    ssh:
+        install-server: yes
+        allow-pw: yes
+        authorized-keys:
+            - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPe5N4id6zHoUTxDca1syp01UJCqWasuwxo8CV14aIhy tc-devops-jh-mi-01 JH
+    storage:
+        layout:
+            name: direct
+    user-data:
+        disable_root: false
+    late-commands:
+        - echo 'administrator ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/administrator
+        - curtin in-target --target=/target -- chmod 440 /etc/sudoers.d/administrator
